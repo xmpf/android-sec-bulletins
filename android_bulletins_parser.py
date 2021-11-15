@@ -11,6 +11,7 @@ from collections import defaultdict
 
 # CONSTANTS
 URL = 'https://source.android.com/security/bulletin'
+NO_SECURITY_ISSUES_MSG = 'There are no security issues'
 
 class BulletinEntry(object):
     BASE_URL = 'https://source.android.com'
@@ -30,7 +31,7 @@ class BulletinEntryDetailed(object):
     pass
 
 def extract_bulletins(html_parser):
-
+    ''' extract bulletin info from main page '''
     bulletins_table = html_parser.find('table')
     if bulletins_table is None:
         raise Exception("Unable to find bulletins table...")
@@ -53,28 +54,66 @@ def extract_bulletins(html_parser):
     return bulletin_table_entries
         
 def extract_bulletin_sections(bulletin_entry):
+    ''' extract detailed info from each bulletin '''
     sess = requests.Session()
     html_page = sess.get(url=bulletin_entry.bulletin_url)
     html_parser = BeautifulSoup(html_page.content, 'html.parser')
     
     print(bulletin_entry)
 
-    table_headers = list(map(lambda x: x.get_text().strip(), html_parser.find_all('h3')))
+    table_headers_ref = html_parser.find_all('h3')[:-3]
+
+    # System, Frameworks, ...
+    table_headers = list(map(lambda x: x.get_text().strip(), table_headers_ref))
+    
+    # try:
+    #     table_headers.remove('Build')
+    #     table_headers.remove('Connect')
+    #     table_headers.remove('Get help')
+    # except ValueError:
+    #     pass
+
+    table_descriptions = list(
+        filter(
+            lambda x: x != "",
+            map(
+                lambda x: x.next_sibling.replace('\n', ' ').strip()
+                if x.next_sibling.text != '\n'
+                else getattr(x.find_next_sibling('p'), "text", '').replace('\n', ' ').strip(),
+                table_headers_ref,
+            ),
+        )
+    )
 
     n_tables = 0
     sections = defaultdict(list)
-    for table in html_parser.find_all('table'):
-        
+    for t in table_headers_ref:
+
+        table = t.find_next_sibling('table')
+
+        # CVE, References, Type, Severity, ...
         column_titles = list(map(lambda x: x.get_text().strip(), table.find_all('th')))
+
+        # find if empty field exist and remove it
+        if column_titles.count(''):
+            column_titles.remove('')
 
         for rows in table.find_all('tr')[1:]:
             entry = []
             n_cols = 0
             for column in rows.find_all('td'):
-                entry.append((column_titles[n_cols], column.get_text().strip()))
-                n_cols += 1 
+                # skip over the empty fields
+                if column.text == '':
+                    continue
+            
+                if table_descriptions[n_tables].startswith(NO_SECURITY_ISSUES_MSG):
+                    n_cols += 1
+                    continue
+
+                entry.append((column_titles[n_cols], column.get_text().replace('\n', ' ').strip()))
+                n_cols += 1 # advance columns
             sections[table_headers[n_tables]].append(entry)
-        n_tables += 1
+        n_tables += 1 # advance tables
 
     return sections
 
@@ -89,9 +128,10 @@ def main():
     bulletin_table_entries = extract_bulletins(html_parser)
 
     # sections for each entry
-    sections = extract_bulletin_sections(bulletin_table_entries[1])
-
-    pprint(sections)
+    for bulletin_table_entry in bulletin_table_entries:
+        sections = extract_bulletin_sections(bulletin_table_entry)
+        pprint(sections)
+        print("-*-" * 30)
 
 if __name__ == '__main__':
     main()
