@@ -5,7 +5,8 @@ import re
 import argparse
 import requests
 
-from bs4 import BeautifulSoup
+from typing import *
+from bs4 import BeautifulSoup # type: ignore
 from pprint import pprint
 from collections import defaultdict
 
@@ -15,27 +16,25 @@ NO_SECURITY_ISSUES_MSG = 'There are no security issues'
 class BulletinEntry(object):
     BASE_URL = 'https://source.android.com'
 
-    def __init__(self, bulletin_url, published_date, patch_level):
+    def __init__(self, bulletin_url: str, published_date: str, patch_level: str) -> None:
         self.bulletin_url = self.BASE_URL + bulletin_url
         self.published_date = published_date
         self.patch_level = patch_level
 
-    def __str__(self):
-        out = f'Bulletin URL: {self.bulletin_url}\n'
+    def __str__(self) -> str:
+        out = f'\n\033[32mBulletin URL: {self.bulletin_url}\033[0m\n'
         out += f'Published date: {self.published_date}\n'
         out += f'Patch Level: {self.patch_level}\n'
         return out
 
 class BulletinEntryDetailed(object):
     
-    def __init__(self, bulletin_entry, sections):
+    def __init__(self, bulletin_entry: BulletinEntry, sections: Dict) -> None:
         self.bulletin_entry = bulletin_entry
         self.sections = sections
     
-    def __str__(self):
-        out = f'\nBulletin URL: {self.bulletin_entry.bulletin_url}\n'
-        out += f'Published date: {self.bulletin_entry.published_date}\n'
-        out += f'Patch Level: {self.bulletin_entry.patch_level}\n'
+    def __str__(self) -> str:
+        out = str(self.bulletin_entry)
         
         for section_header, section_data in self.sections.items():
             out += f'\n\033[31;1;4mSection: {section_header}\033[0m\n'
@@ -46,7 +45,7 @@ class BulletinEntryDetailed(object):
                     out += f'{a}: {b}\n'
         return out
 
-def extract_bulletins(html_parser):
+def extract_bulletins(html_parser: BeautifulSoup) -> List[BulletinEntry]:
     ''' extract bulletin info from main page '''
     bulletins_table = html_parser.find('table')
     if bulletins_table is None:
@@ -69,25 +68,16 @@ def extract_bulletins(html_parser):
     
     return bulletin_table_entries
         
-def extract_bulletin_sections(bulletin_entry):
+def extract_bulletin_sections(bulletin_entry: BulletinEntry) -> BulletinEntryDetailed:
     ''' extract detailed info from each bulletin '''
     sess = requests.Session()
     html_page = sess.get(url=bulletin_entry.bulletin_url)
     html_parser = BeautifulSoup(html_page.content, 'html.parser')
-    
-    # print(bulletin_entry)
 
     table_headers_ref = html_parser.find_all('h3')[:-3]
 
     # System, Frameworks, ...
     table_headers = list(map(lambda x: x.get_text().strip(), table_headers_ref))
-    
-    # try:
-    #     table_headers.remove('Build')
-    #     table_headers.remove('Connect')
-    #     table_headers.remove('Get help')
-    # except ValueError:
-    #     pass
 
     table_descriptions = list(
         filter(
@@ -133,7 +123,7 @@ def extract_bulletin_sections(bulletin_entry):
 
     return BulletinEntryDetailed(bulletin_entry, sections)
 
-def main():
+def main() -> None:
     # parser = argparse.ArgumentParser()
     sess = requests.Session()
     html_page = sess.get(url=URL)
