@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-import csv
+import re
 import argparse
 import requests
 
@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 from pprint import pprint
 from collections import defaultdict
 
-# CONSTANTS
 URL = 'https://source.android.com/security/bulletin'
 NO_SECURITY_ISSUES_MSG = 'There are no security issues'
 
@@ -28,7 +27,24 @@ class BulletinEntry(object):
         return out
 
 class BulletinEntryDetailed(object):
-    pass
+    
+    def __init__(self, bulletin_entry, sections):
+        self.bulletin_entry = bulletin_entry
+        self.sections = sections
+    
+    def __str__(self):
+        out = f'\nBulletin URL: {self.bulletin_entry.bulletin_url}\n'
+        out += f'Published date: {self.bulletin_entry.published_date}\n'
+        out += f'Patch Level: {self.bulletin_entry.patch_level}\n'
+        
+        for section_header, section_data in self.sections.items():
+            out += f'\n\033[31;1;4mSection: {section_header}\033[0m\n'
+            for line in section_data:
+                out += '\n'
+                for a, b in line:
+                    b = re.sub("\s+", " ", b)
+                    out += f'{a}: {b}\n'
+        return out
 
 def extract_bulletins(html_parser):
     ''' extract bulletin info from main page '''
@@ -59,7 +75,7 @@ def extract_bulletin_sections(bulletin_entry):
     html_page = sess.get(url=bulletin_entry.bulletin_url)
     html_parser = BeautifulSoup(html_page.content, 'html.parser')
     
-    print(bulletin_entry)
+    # print(bulletin_entry)
 
     table_headers_ref = html_parser.find_all('h3')[:-3]
 
@@ -115,8 +131,7 @@ def extract_bulletin_sections(bulletin_entry):
             sections[table_headers[n_tables]].append(entry)
         n_tables += 1 # advance tables
 
-    return sections
-
+    return BulletinEntryDetailed(bulletin_entry, sections)
 
 def main():
     # parser = argparse.ArgumentParser()
@@ -128,9 +143,9 @@ def main():
     bulletin_table_entries = extract_bulletins(html_parser)
 
     # sections for each entry
-    for bulletin_table_entry in bulletin_table_entries:
+    for bulletin_table_entry in bulletin_table_entries[:2]:
         sections = extract_bulletin_sections(bulletin_table_entry)
-        pprint(sections)
+        print(sections)
         print("-*-" * 30)
 
 if __name__ == '__main__':
